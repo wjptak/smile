@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.math.random;
 
@@ -42,7 +43,10 @@ public class UniversalGenerator implements RandomNumberGenerator {
      * <CODE>BIG_PRIME = 899999963</CODE>
      */
     static final int BIG_PRIME = 899999963;
-    private double c, cd, cm, u[];
+    private double c;
+    private double cd;
+    private double cm;
+    private double[] u;
     private int i97, j97;
 
     /**
@@ -54,6 +58,7 @@ public class UniversalGenerator implements RandomNumberGenerator {
 
     /**
      * Initialize Random with a specified integer seed
+     * @param seed the seed of random numbers.
      */
     public UniversalGenerator(int seed) {
         setSeed(seed);
@@ -61,6 +66,7 @@ public class UniversalGenerator implements RandomNumberGenerator {
 
     /**
      * Initialize Random with a specified long seed
+     * @param seed the seed of random numbers.
      */
     public UniversalGenerator(long seed) {
         setSeed(seed);
@@ -190,18 +196,7 @@ public class UniversalGenerator implements RandomNumberGenerator {
             throw new IllegalArgumentException("n must be positive");
         }
         
-        // n is a power of 2
-        if ((n & -n) == n) {
-            return (int) ((n * (long) next(31)) >> 31);
-        }
-
-        int bits, val;
-        do {
-            bits = next(31);
-            val = bits % n;
-        } while (bits - val + (n - 1) < 0);
-        
-        return val;
+        return (int) (nextDouble() * n);
     }
     
     @Override

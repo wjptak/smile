@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.nlp.tokenizer;
 
@@ -21,7 +22,7 @@ import java.util.regex.Pattern;
 
 /**
  * A word tokenizer that tokenizes English sentences with some differences from
- * TreebankWordTokenizer, noteably on handling not-contractions. If a period
+ * TreebankWordTokenizer, notably on handling not-contractions. If a period
  * serves as both the end of sentence and a part of abbreviation, e.g. etc. at
  * the end of sentence, it will generate tokens of "etc." and "." while
  * TreebankWordTokenizer will generate "etc" and ".".
@@ -91,12 +92,15 @@ public class SimpleTokenizer implements Tokenizer {
         // Separate single quotes if they're followed by a space.
         Pattern.compile("(?U)('\\s)"),
         // Separate periods that come before newline or end of string.
-        Pattern.compile("(?U)\\. *(\\n|$)")
+        Pattern.compile("(?U)\\. *(\\n|$)"),
+        // Separate continuous periods such as ... in ToC.
+        Pattern.compile("(?U)(\\.{3,})")
+
     };
 
     private static final Pattern WHITESPACE = Pattern.compile("(?U)\\s+");
 
-    private boolean splitContraction;
+    private final boolean splitContraction;
     /**
      * Constructor.
      */
@@ -136,6 +140,7 @@ public class SimpleTokenizer implements Tokenizer {
         text = DELIMITERS[1].matcher(text).replaceAll(" $1");
         text = DELIMITERS[2].matcher(text).replaceAll(" $1");
         text = DELIMITERS[3].matcher(text).replaceAll(" . ");
+        text = DELIMITERS[4].matcher(text).replaceAll(" $1 ");
 
         String[] words = WHITESPACE.split(text);
         if (words.length > 1 && words[words.length-1].equals(".")) {
@@ -151,6 +156,6 @@ public class SimpleTokenizer implements Tokenizer {
             }
         }
         
-        return result.toArray(new String[result.size()]);
+        return result.toArray(new String[0]);
     }
 }

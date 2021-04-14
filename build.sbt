@@ -1,22 +1,21 @@
 name := "smile"
 
-import com.typesafe.sbt.pgp.PgpKeys.{useGpg, publishSigned, publishLocalSigned}
-
 lazy val commonSettings = Seq(
+  // skip packageDoc task on stage
+  mappings in (Compile, packageDoc) := Seq(),
+  // skip javadoc and scaladoc for publishLocal
+  publishArtifact in (Compile, packageDoc) := false,
+  // always set scala version including Java only modules
+  scalaVersion := "2.13.5",
+
   organization := "com.github.haifengl",
   organizationName := "Haifeng Li",
   organizationHomepage := Some(url("http://haifengl.github.io/")),
-  version := "1.2.1",
-  javacOptions in (Compile, compile) ++= Seq("-source", "1.8", "-target", "1.8", "-encoding", "UTF8", "-g:lines,vars,source", "-Xlint:unchecked"),
-  javacOptions in (Compile, doc) ++= Seq("-Xdoclint:none"),
-  javaOptions in test += "-Dsmile.threads=1",
-  libraryDependencies += "org.slf4j" % "slf4j-simple" % "1.7.21" % "test",
-  libraryDependencies += "com.novocode" % "junit-interface" % "0.11" % "test",
-  scalaVersion := "2.11.8",
-  scalacOptions := Seq("-unchecked", "-deprecation", "-feature", "-encoding", "utf8"),
+  version := "2.6.1",
+
   parallelExecution in Test := false,
-  crossPaths := false,
-  autoScalaLibrary := false,
+  autoAPIMappings := true,
+
   publishTo := {
     val nexus = "https://oss.sonatype.org/"
     if (isSnapshot.value)
@@ -24,16 +23,15 @@ lazy val commonSettings = Seq(
     else
       Some("releases"  at nexus + "service/local/staging/deploy/maven2")
   },
-  publishArtifact in Test := false ,
+  publishArtifact in Test := false,
   publishMavenStyle := true,
-  useGpg := true,
   pomIncludeRepository := { _ => false },
   pomExtra := (
     <url>https://github.com/haifengl/smile</url>
       <licenses>
         <license>
-          <name>Apache License, Version 2.0</name>
-          <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+          <name>GNU Lesser General Public License, Version 3</name>
+          <url>https://opensource.org/licenses/LGPL-3.0</url>
           <distribution>repo</distribution>
         </license>
       </licenses>
@@ -45,41 +43,125 @@ lazy val commonSettings = Seq(
         <developer>
           <id>haifengl</id>
           <name>Haifeng Li</name>
-          <url>http://haifengl.github.io/</url>
+          <url>https://haifengl.github.io/</url>
         </developer>
       </developers>
   )
 )
 
-lazy val nonPubishSettings = commonSettings ++ Seq(
-  //publishArtifact := false,
-  publishLocal := {},
-  publish := {},
-  publishSigned := {},
-  publishLocalSigned := {}
+lazy val javaSettings = commonSettings ++ Seq(
+  crossPaths := false,
+  autoScalaLibrary := false,
+  javacOptions in (Compile, compile) ++= Seq(
+    "-encoding", "UTF8",
+    "-g:lines,vars,source",
+    "-Xlint:deprecation",
+    "-Xlint:unchecked"
+  ),
+  javacOptions in (Compile, doc) ++= Seq(
+    "-Xdoclint:none",
+    "--allow-script-in-comments",
+    "-doctitle", """Smile &mdash; Statistical Machine Intelligence and Learning Engine""",
+    "-bottom", """<script src="{@docRoot}/../../js/google-analytics.js" type="text/javascript"></script>"""
+    ),
+  libraryDependencies ++= Seq(
+    "org.slf4j" % "slf4j-simple" % "1.7.30" % "test",
+    "junit" % "junit" % "4.13.2" % "test",
+    "com.novocode" % "junit-interface" % "0.11" % "test" exclude("junit", "junit-dep")
+  ),
+  testOptions in Test := Seq(Tests.Argument(TestFrameworks.JUnit, "-a"))
 )
 
-lazy val root = project.in(file(".")).settings(nonPubishSettings: _*)
-  .aggregate(core, data, math, graph, plot, interpolation, nlp, demo, benchmark, scala, shell)
+lazy val java8Settings = javaSettings ++ Seq(
+  javacOptions in (Compile, compile) ++= Seq(
+    "-source", "1.8",
+    "-target", "1.8"
+  ),
+)
 
-lazy val math = project.in(file("math")).settings(commonSettings: _*)
+lazy val java15Settings = javaSettings ++ Seq(
+  javacOptions in (Compile, compile) ++= Seq(
+    "-source", "15",
+    "-target", "15",
+    "--enable-preview",
+    "-Xlint:preview"
+  ),
+  javacOptions in (Compile, doc) ++= Seq(
+    "--enable-preview"
+  )
+)
 
-lazy val core = project.in(file("core")).settings(commonSettings: _*).dependsOn(data, math, graph)
+lazy val scalaSettings = commonSettings ++ Seq(
+  crossPaths := true,
+  autoScalaLibrary := true,
+  scalacOptions := Seq(
+    "-unchecked",
+    "-deprecation",
+    "-feature",
+    "-encoding", "utf8",
+    "-target:jvm-1.8"
+  ),
+  scalacOptions in (Compile, doc) ++= Seq(
+    "-groups",
+    "-implicits"
+  )
+)
 
-lazy val data = project.in(file("data")).settings(commonSettings: _*).dependsOn(math)
+lazy val root = project.in(file("."))
+  .settings(commonSettings: _*)
+  .enablePlugins(JavaUnidocPlugin)
+  .settings(
+    unidocProjectFilter in (JavaUnidoc, unidoc) := inAnyProject -- inProjects(json, demo, scala, spark, shell, plot)
+  )
+  .aggregate(core, data, io, math, mkl, nlp, plot, json, demo, scala, spark, shell)
 
-lazy val graph = project.in(file("graph")).settings(commonSettings: _*).dependsOn(math)
+lazy val math = project.in(file("math")).settings(java8Settings: _*)
 
-lazy val interpolation = project.in(file("interpolation")).settings(commonSettings: _*).dependsOn(math)
+lazy val mkl = project.in(file("mkl"))
+  .settings(java8Settings: _*)
+  .dependsOn(math)
 
-lazy val nlp = project.in(file("nlp")).settings(commonSettings: _*).dependsOn(core)
+lazy val data = project.in(file("data"))
+  .settings(java8Settings: _*)
+  .dependsOn(math)
 
-lazy val plot = project.in(file("plot")).settings(commonSettings: _*).dependsOn(core)
+lazy val io = project.in(file("io"))
+  .settings(java8Settings: _*)
+  .dependsOn(data)
 
-lazy val demo = project.in(file("demo")).settings(nonPubishSettings: _*).dependsOn(core, interpolation, plot)
+lazy val core = project.in(file("core"))
+  .settings(java8Settings: _*)
+  .dependsOn(data, math, io % "test")
 
-lazy val benchmark = project.in(file("benchmark")).settings(nonPubishSettings: _*).dependsOn(core, scala)
+lazy val deep = project.in(file("deep"))
+  .settings(java8Settings: _*)
+  .settings(publish / skip := true)
 
-lazy val scala = project.in(file("scala")).settings(commonSettings: _*).dependsOn(interpolation, nlp, plot)
+lazy val nlp = project.in(file("nlp"))
+  .settings(java8Settings: _*)
+  .dependsOn(core)
 
-lazy val shell = project.in(file("shell")).settings(nonPubishSettings: _*).dependsOn(benchmark, demo, scala)
+lazy val plot = project.in(file("plot"))
+  .settings(java8Settings: _*)
+  .dependsOn(core)
+
+lazy val demo = project.in(file("demo"))
+  .settings(java8Settings: _*)
+  .settings(publish / skip := true)
+  .dependsOn(core, io, plot)
+
+lazy val json = project.in(file("json")).settings(scalaSettings: _*)
+
+lazy val scala = project.in(file("scala"))
+  .settings(scalaSettings: _*)
+  .dependsOn(core, io, nlp, plot, json)
+
+lazy val spark = project.in(file("spark"))
+  .settings(scalaSettings: _*)
+  .settings(publish / skip := true)
+  .dependsOn(core, data, io % "test")
+
+lazy val shell = project.in(file("shell"))
+  .settings(scalaSettings: _*)
+  .settings(publish / skip := true)
+  .dependsOn(demo, scala)

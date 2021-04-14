@@ -1,31 +1,38 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.regression;
 
-import smile.sort.QuickSort;
-import smile.validation.Validation;
+import smile.base.cart.Loss;
+import smile.data.*;
+import smile.data.formula.Formula;
 import smile.validation.CrossValidation;
-import smile.data.AttributeDataset;
-import smile.data.parser.ArffParser;
-import smile.math.Math;
+import smile.validation.LOOCV;
+import smile.validation.RegressionMetrics;
+import smile.validation.RegressionValidations;
+import smile.validation.metric.RMSE;
+import smile.math.MathEx;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+
+import static org.junit.Assert.*;
 
 /**
  *
@@ -52,136 +59,127 @@ public class GradientTreeBoostTest {
     public void tearDown() {
     }
 
-    public void test(GradientTreeBoost.Loss loss, String dataset, String url, int response) {
-        System.out.println(dataset + "\t" + loss);
-        ArffParser parser = new ArffParser();
-        parser.setResponseIndex(response);
-        try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile(url));
-            double[] datay = data.toArray(new double[data.size()]);
-            double[][] datax = data.toArray(new double[data.size()][]);
-            
-            int n = datax.length;
-            int k = 10;
+    @Test
+    public void testLongley() throws Exception {
+        System.out.println("longley");
 
-            CrossValidation cv = new CrossValidation(n, k);
-            double rss = 0.0;
-            double ad = 0.0;
-            for (int i = 0; i < k; i++) {
-                double[][] trainx = Math.slice(datax, cv.train[i]);
-                double[] trainy = Math.slice(datay, cv.train[i]);
-                double[][] testx = Math.slice(datax, cv.test[i]);
-                double[] testy = Math.slice(datay, cv.test[i]);
+        MathEx.setSeed(19650218); // to get repeatable results.
+        GradientTreeBoost model = GradientTreeBoost.fit(Longley.formula, Longley.data);
 
-                GradientTreeBoost boost = new GradientTreeBoost(data.attributes(), trainx, trainy, loss, 100, 6, 0.05, 0.7);
+        double[] importance = model.importance();
+        System.out.println("----- importance -----");
+        for (int i = 0; i < importance.length; i++) {
+            System.out.format("%-15s %12.4f%n", model.schema().name(i), importance[i]);
+        }
 
-                for (int j = 0; j < testx.length; j++) {
-                    double r = testy[j] - boost.predict(testx[j]);
-                    ad += Math.abs(r);
-                    rss += r * r;
-                }
-            }
+        System.out.println("----- Progressive RMSE -----");
+        double[][] test = model.test(Longley.data);
+        for (int i = 0; i < test.length; i++) {
+            System.out.format("RMSE with %3d trees: %.4f%n", i+1, RMSE.of(Longley.y, test[i]));
+        }
 
-            System.out.format("10-CV RMSE = %.4f \t AbsoluteDeviation = %.4f%n", Math.sqrt(rss/n), ad/n);
-         } catch (Exception ex) {
-             System.err.println(ex);
-         }
+        RegressionMetrics metrics = LOOCV.regression(Longley.formula, Longley.data, GradientTreeBoost::fit);
+
+        System.out.println(metrics);
+        assertEquals(3.5453, metrics.rmse, 1E-4);
+
+        java.nio.file.Path temp = smile.data.Serialize.write(model);
+        smile.data.Serialize.read(temp);
     }
-    
-    /**
-     * Test of learn method, of class RegressionTree.
-     */
+
+    public void test(Loss loss, String name, Formula formula, DataFrame data, double expected) {
+        System.out.println(name + "\t" + loss);
+
+        MathEx.setSeed(19650218); // to get repeatable results.
+        GradientTreeBoost model = GradientTreeBoost.fit(formula, data);
+
+        double[] importance = model.importance();
+        System.out.println("----- importance -----");
+        for (int i = 0; i < importance.length; i++) {
+            System.out.format("%-15s %12.4f%n", model.schema().name(i), importance[i]);
+        }
+
+        RegressionValidations<GradientTreeBoost> result = CrossValidation.regression(10, formula, data,
+                (f, x) -> GradientTreeBoost.fit(f, x, loss, 100, 20, 6, 5, 0.05, 0.7));
+
+        System.out.println(result);
+        assertEquals(expected, result.avg.rmse, 1E-4);
+    }
+
     @Test
     public void testLS() {
-        test(GradientTreeBoost.Loss.LeastSquares, "CPU", "weka/cpu.arff", 6);
-        //test(GradientTreeBoost.Loss.LeastSquares, "2dplanes", "weka/regression/2dplanes.arff", 6);
-        //test(GradientTreeBoost.Loss.LeastSquares, "abalone", "weka/regression/abalone.arff", 8);
-        //test(GradientTreeBoost.Loss.LeastSquares, "ailerons", "weka/regression/ailerons.arff", 40);
-        //test(GradientTreeBoost.Loss.LeastSquares, "bank32nh", "weka/regression/bank32nh.arff", 32);
-        test(GradientTreeBoost.Loss.LeastSquares, "autoMPG", "weka/regression/autoMpg.arff", 7);
-        test(GradientTreeBoost.Loss.LeastSquares, "cal_housing", "weka/regression/cal_housing.arff", 8);
-        //test(GradientTreeBoost.Loss.LeastSquares, "puma8nh", "weka/regression/puma8nh.arff", 8);
-        //test(GradientTreeBoost.Loss.LeastSquares, "kin8nm", "weka/regression/kin8nm.arff", 8);
+        test(Loss.ls(), "CPU", CPU.formula, CPU.data, 60.5335);
+        test(Loss.ls(), "2dplanes", Planes.formula, Planes.data, 1.1016);
+        test(Loss.ls(), "abalone", Abalone.formula, Abalone.train, 2.2159);
+        test(Loss.ls(), "ailerons", Ailerons.formula, Ailerons.data, 0.0002);
+        test(Loss.ls(), "bank32nh", Bank32nh.formula, Bank32nh.data, 0.0845);
+        test(Loss.ls(), "autoMPG", AutoMPG.formula, AutoMPG.data, 3.0904);
+        test(Loss.ls(), "cal_housing", CalHousing.formula, CalHousing.data, 60581.4183);
+        test(Loss.ls(), "puma8nh", Puma8NH.formula, Puma8NH.data, 3.2482);
+        test(Loss.ls(), "kin8nm", Kin8nm.formula, Kin8nm.data, 0.1802);
     }
-    
-    /**
-     * Test of learn method, of class RegressionTree.
-     */
+
     @Test
     public void testLAD() {
-        test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "CPU", "weka/cpu.arff", 6);
-        //test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "2dplanes", "weka/regression/2dplanes.arff", 6);
-        //test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "abalone", "weka/regression/abalone.arff", 8);
-        //test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "ailerons", "weka/regression/ailerons.arff", 40);
-        //test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "bank32nh", "weka/regression/bank32nh.arff", 32);
-        test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "autoMPG", "weka/regression/autoMpg.arff", 7);
-        test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "cal_housing", "weka/regression/cal_housing.arff", 8);
-        //test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "puma8nh", "weka/regression/puma8nh.arff", 8);
-        //test(GradientTreeBoost.Loss.LeastAbsoluteDeviation, "kin8nm", "weka/regression/kin8nm.arff", 8);
+        test(Loss.lad(), "CPU", CPU.formula, CPU.data, 66.0549);
+        test(Loss.lad(), "2dplanes", Planes.formula, Planes.data, 1.1347);
+        test(Loss.lad(), "abalone", Abalone.formula, Abalone.train, 2.2958);
+        test(Loss.lad(), "ailerons", Ailerons.formula, Ailerons.data, 0.0002);
+        test(Loss.lad(), "bank32nh", Bank32nh.formula, Bank32nh.data, 0.0909);
+        test(Loss.lad(), "autoMPG", AutoMPG.formula, AutoMPG.data, 3.0979);
+        test(Loss.lad(), "cal_housing", CalHousing.formula, CalHousing.data, 66742.1902);
+        test(Loss.lad(), "puma8nh", Puma8NH.formula, Puma8NH.data, 3.2486);
+        test(Loss.lad(), "kin8nm", Kin8nm.formula, Kin8nm.data, 0.1814);
     }
-    
-    /**
-     * Test of learn method, of class RegressionTree.
-     */
+
+    @Test
+    public void testQuantile() {
+        test(Loss.quantile(0.5), "CPU", CPU.formula, CPU.data, 66.0549);
+        test(Loss.quantile(0.5), "2dplanes", Planes.formula, Planes.data, 1.1347);
+        test(Loss.quantile(0.5), "abalone", Abalone.formula, Abalone.train, 2.2958);
+        test(Loss.quantile(0.5), "ailerons", Ailerons.formula, Ailerons.data, 0.0002);
+        test(Loss.quantile(0.5), "bank32nh", Bank32nh.formula, Bank32nh.data, 0.0909);
+        test(Loss.quantile(0.5), "autoMPG", AutoMPG.formula, AutoMPG.data, 3.0979);
+        test(Loss.quantile(0.5), "cal_housing", CalHousing.formula, CalHousing.data, 66742.1902);
+        test(Loss.quantile(0.5), "puma8nh", Puma8NH.formula, Puma8NH.data, 3.2486);
+        test(Loss.quantile(0.5), "kin8nm", Kin8nm.formula, Kin8nm.data, 0.1814);
+    }
+
     @Test
     public void testHuber() {
-        test(GradientTreeBoost.Loss.Huber, "CPU", "weka/cpu.arff", 6);
-        //test(GradientTreeBoost.Loss.Huber, "2dplanes", "weka/regression/2dplanes.arff", 6);
-        //test(GradientTreeBoost.Loss.Huber, "abalone", "weka/regression/abalone.arff", 8);
-        //test(GradientTreeBoost.Loss.Huber, "ailerons", "weka/regression/ailerons.arff", 40);
-        //test(GradientTreeBoost.Loss.Huber, "bank32nh", "weka/regression/bank32nh.arff", 32);
-        test(GradientTreeBoost.Loss.Huber, "autoMPG", "weka/regression/autoMpg.arff", 7);
-        test(GradientTreeBoost.Loss.Huber, "cal_housing", "weka/regression/cal_housing.arff", 8);
-        //test(GradientTreeBoost.Loss.Huber, "puma8nh", "weka/regression/puma8nh.arff", 8);
-        //test(GradientTreeBoost.Loss.Huber, "kin8nm", "weka/regression/kin8nm.arff", 8);
+        test(Loss.huber(0.9), "CPU", CPU.formula, CPU.data, 65.4128);
+        test(Loss.huber(0.9), "2dplanes", Planes.formula, Planes.data, 1.1080);
+        test(Loss.huber(0.9), "abalone", Abalone.formula, Abalone.train, 2.2228);
+        test(Loss.huber(0.9), "ailerons", Ailerons.formula, Ailerons.data, 0.0002);
+        test(Loss.huber(0.9), "bank32nh", Bank32nh.formula, Bank32nh.data, 0.0853);
+        test(Loss.huber(0.9), "autoMPG", AutoMPG.formula, AutoMPG.data, 3.1155);
+        test(Loss.huber(0.9), "cal_housing", CalHousing.formula, CalHousing.data, 62090.2639);
+        test(Loss.huber(0.9), "puma8nh", Puma8NH.formula, Puma8NH.data, 3.2429);
+        test(Loss.huber(0.9), "kin8nm", Kin8nm.formula, Kin8nm.data, 0.1795);
     }
-    
-    /**
-     * Test of learn method, of class GradientTreeBoost.
-     */
+
     @Test
-    public void testCPU() {
-        System.out.println("CPU");
-        ArffParser parser = new ArffParser();
-        parser.setResponseIndex(6);
-        try {
-            AttributeDataset data = parser.parse(smile.data.parser.IOUtils.getTestDataFile("weka/cpu.arff"));
-            double[] datay = data.toArray(new double[data.size()]);
-            double[][] datax = data.toArray(new double[data.size()][]);
+    public void testShap() {
+        MathEx.setSeed(19650218); // to get repeatable results.
+        GradientTreeBoost model = GradientTreeBoost.fit(BostonHousing.formula, BostonHousing.data, Loss.ls(), 100, 20, 100, 5, 0.05, 0.7);
+        double[] importance = model.importance();
+        double[] shap = model.shap(BostonHousing.data);
 
-            int n = datax.length;
-            int m = 3 * n / 4;
-            int[] index = Math.permutate(n);
-            
-            double[][] trainx = new double[m][];
-            double[] trainy = new double[m];            
-            for (int i = 0; i < m; i++) {
-                trainx[i] = datax[index[i]];
-                trainy[i] = datay[index[i]];
-            }
-            
-            double[][] testx = new double[n-m][];
-            double[] testy = new double[n-m];            
-            for (int i = m; i < n; i++) {
-                testx[i-m] = datax[index[i]];
-                testy[i-m] = datay[index[i]];                
-            }
-
-            GradientTreeBoost boost = new GradientTreeBoost(data.attributes(), trainx, trainy, 100);
-            System.out.format("RMSE = %.4f%n", Validation.test(boost, testx, testy));
-            
-            double[] rmse = boost.test(testx, testy);
-            for (int i = 1; i <= rmse.length; i++) {
-                System.out.format("%d trees RMSE = %.4f%n", i, rmse[i-1]);
-            }
-
-            double[] importance = boost.importance();
-            index = QuickSort.sort(importance);
-            for (int i = importance.length; i-- > 0; ) {
-                System.out.format("%s importance is %.4f%n", data.attributes()[index[i]], importance[i]);
-            }
-        } catch (Exception ex) {
-            System.err.println(ex);
+        System.out.println("----- importance -----");
+        String[] fields = java.util.Arrays.stream(model.schema().fields()).map(field -> field.name).toArray(String[]::new);
+        smile.sort.QuickSort.sort(importance, fields);
+        for (int i = 0; i < importance.length; i++) {
+            System.out.format("%-15s %12.4f%n", fields[i], importance[i]);
         }
+
+        System.out.println("----- SHAP -----");
+        fields = java.util.Arrays.stream(model.schema().fields()).map(field -> field.name).toArray(String[]::new);
+        smile.sort.QuickSort.sort(shap, fields);
+        for (int i = 0; i < shap.length; i++) {
+            System.out.format("%-15s %12.4f%n", fields[i], shap[i]);
+        }
+
+        String[] expected = {"CHAS", "ZN", "RAD", "INDUS", "B", "TAX", "AGE", "PTRATIO", "NOX", "CRIM", "DIS", "RM", "LSTAT"};
+        assertArrayEquals(expected, fields);
     }
 }

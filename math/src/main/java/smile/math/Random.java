@@ -1,22 +1,24 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.math;
 
-import smile.math.random.RandomNumberGenerator;
+import java.util.stream.IntStream;
+import smile.math.random.MersenneTwister;
 import smile.math.random.UniversalGenerator;
 
 /**
@@ -27,27 +29,33 @@ import smile.math.random.UniversalGenerator;
  */
 public class Random {
 
-    private RandomNumberGenerator rng;
+    private final UniversalGenerator real;
+    private final MersenneTwister twister;
 
     /**
      * Initialize with default random number generator engine.
      */
     public Random() {
-        this(new UniversalGenerator());
+        real = new UniversalGenerator();
+        twister = new MersenneTwister();
     }
 
     /**
      * Initialize with given seed for default random number generator engine.
+     * @param seed the RNG seed.
      */
     public Random(long seed) {
-        this(new UniversalGenerator(seed));
+        real = new UniversalGenerator(seed);
+        twister = new MersenneTwister(seed);
     }
 
     /**
-     * Initialize with given random number generator engine.
+     * Initialize the random generator with a seed.
+     * @param seed the RNG seed.
      */
-    public Random(RandomNumberGenerator rng) {
-        this.rng = rng;
+    public void setSeed(long seed) {
+        real.setSeed(seed);
+        twister.setSeed(seed);
     }
 
     /**
@@ -55,7 +63,7 @@ public class Random {
      * @return a pseudo random number
      */
     public double nextDouble() {
-        return rng.nextDouble();
+        return real.nextDouble();
     }
 
     /**
@@ -63,7 +71,7 @@ public class Random {
      * @param d array of random numbers to be generated
      */
     public void nextDoubles(double[] d) {
-        rng.nextDoubles(d);
+        real.nextDoubles(d);
     }
 
     /**
@@ -83,7 +91,7 @@ public class Random {
      * @param d array of random numbers to be generated
      */
     public void nextDoubles(double[] d, double lo, double hi) {
-        rng.nextDoubles(d);
+        real.nextDoubles(d);
 
         double l = hi - lo;        
         int n = d.length;
@@ -93,82 +101,83 @@ public class Random {
     }
 
     /**
-     * Initialize the random generator with a seed.
-     */
-    public void setSeed(long seed) {
-        rng.setSeed(seed);
-    }
-
-    /**
      * Returns a random integer.
+     * @return a random integer.
      */
     public int nextInt() {
-        return rng.nextInt();
+        return twister.nextInt();
     }
     
     /**
      * Returns a random integer in [0, n).
+     * @param n the upper bound of random number.
+     * @return a random integer.
      */
     public int nextInt(int n) {
-        return rng.nextInt(n);
-    }
-
-    public long nextLong() {
-        return rng.nextLong();
+        return twister.nextInt(n);
     }
 
     /**
-     * Generates a permutation of 0, 1, 2, ..., n-1, which is useful for
-     * sampling without replacement.
+     * Returns a random long integer.
+     * @return a random long integer.
+     */
+    public long nextLong() {
+        return twister.nextLong();
+    }
+
+    /**
+     * Returns a permutation of <code>(0, 1, 2, ..., n-1)</code>.
+     *
+     * @param n the upper bound.
+     * @return the permutation of <code>(0, 1, 2, ..., n-1)</code>.
      */
     public int[] permutate(int n) {
-        int[] x = new int[n];
-        for (int i = 0; i < n; i++) {
-            x[i] = i;
-        }
-
+        int[] x = IntStream.range(0, n).toArray();
         permutate(x);
-
         return x;
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public void permutate(int[] x) {
         for (int i = 0; i < x.length; i++) {
             int j = i + nextInt(x.length - i);
-            Math.swap(x, i, j);
+            MathEx.swap(x, i, j);
         }
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public void permutate(float[] x) {
         for (int i = 0; i < x.length; i++) {
             int j = i + nextInt(x.length - i);
-            Math.swap(x, i, j);
+            MathEx.swap(x, i, j);
         }
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public void permutate(double[] x) {
         for (int i = 0; i < x.length; i++) {
             int j = i + nextInt(x.length - i);
-            Math.swap(x, i, j);
+            MathEx.swap(x, i, j);
         }
     }
 
     /**
-     * Generates a permutation of given array.
+     * Permutates an array.
+     * @param x the array.
      */
     public void permutate(Object[] x) {
         for (int i = 0; i < x.length; i++) {
             int j = i + nextInt(x.length - i);
-            Math.swap(x, i, j);
+            MathEx.swap(x, i, j);
         }
     }
 }

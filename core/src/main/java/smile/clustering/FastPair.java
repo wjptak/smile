@@ -1,19 +1,23 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 package smile.clustering;
+
+import smile.clustering.linkage.Linkage;
 
 /**
  * Fast pair algorithm: hybrid of conga line and nearest neighbors.
@@ -31,7 +35,7 @@ package smile.clustering;
  * <p>
  * Total space: 20n bytes. (Could be reduced to 4n at some cost in update time.)
  * Time per insertion or single distance update: O(n)
- * Time per deletion or point update: O(n) expected, O(n^2) worst case
+ * Time per deletion or point update: O(n) expected, O(n<sup>2</sup>) worst case
  * Time per closest pair: O(n)
  *
  * <h2>References</h2>
@@ -45,32 +49,32 @@ package smile.clustering;
  */
 class FastPair {
 
-    private int[] points;            // points currently in set
-    private int[] index;             // indices into points
+    private final int[] points;            // points currently in set
+    private final int[] index;             // indices into points
     private int npoints;             // how much of array is actually used?
-    private int[] neighbor;
-    private double[] distance;
-    private double[][] proximity;
+    private final int[] neighbor;
+    private final float[] distance;
+    private final Linkage linkage;
 
     /**
      * Constructor
      */
-    public FastPair(int[] points, double[][] proximity) {
+    public FastPair(int[] points, Linkage linkage) {
         this.points = points;
-        this.proximity = proximity;
+        this.linkage = linkage;
 
         npoints = points.length;
         neighbor = new int[npoints];
         index = new int[npoints];
-        distance = new double[npoints];
+        distance = new float[npoints];
 
         // Find all neighbors. We use a conga line rather than calling getNeighbor.
         for (int i = 0; i < npoints - 1; i++) {
             // find neighbor to p[0]
             int nbr = i + 1;
-            double nbd = Double.MAX_VALUE;
+            float nbd = Float.MAX_VALUE;
             for (int j = i + 1; j < npoints; j++) {
-                double d = d(points[i], points[j]);
+                float d = linkage.d(points[i], points[j]);
                 if (d < nbd) {
                     nbr = j;
                     nbd = d;
@@ -86,23 +90,12 @@ class FastPair {
 
         // No more neighbors, terminate conga line
         neighbor[points[npoints - 1]] = points[npoints - 1];
-        distance[points[npoints - 1]] = Double.MAX_VALUE;
+        distance[points[npoints - 1]] = Float.MAX_VALUE;
 
         // set where_are...
         for (int i = 0; i < npoints; i++) {
             index[points[i]] = i;
         }
-    }
-
-    /**
-     * Returns the distance/dissimilarity between two clusters/objects, which
-     * are indexed by integers.
-     */
-    private double d(int i, int j) {
-        if (i > j)
-            return proximity[i][j];
-        else
-            return proximity[j][i];
     }
 
     /**
@@ -112,7 +105,7 @@ class FastPair {
         // if no neighbors available, set flag for UpdatePoint to find
         if (npoints == 1) {
             neighbor[p] = p;
-            distance[p] = Double.MAX_VALUE;
+            distance[p] = Float.MAX_VALUE;
             return;
         }
 
@@ -123,13 +116,13 @@ class FastPair {
         }
 
         neighbor[p] = points[first];
-        distance[p] = d(p, neighbor[p]);
+        distance[p] = linkage.d(p, neighbor[p]);
 
         // now test whether each other point is closer
         for (int i = first + 1; i < npoints; i++) {
             int q = points[i];
             if (q != p) {
-                double d = d(p, q);
+                float d = linkage.d(p, q);
                 if (d < distance[p]) {
                     distance[p] = d;
                     neighbor[p] = q;
@@ -146,9 +139,9 @@ class FastPair {
         points[index[p] = npoints++] = p;
     }
 
-/**
- * Remove a point and update neighbors of points for which it had been nearest
- */
+    /**
+     * Remove a point and update neighbors of points for which it had been nearest
+     */
     public void remove(int p) {
         npoints--;
         int q = index[p];
@@ -199,11 +192,11 @@ class FastPair {
      */
     public void updatePoint(int p) {
         neighbor[p] = p;    // flag for not yet found any
-        distance[p] = Double.MAX_VALUE;
+        distance[p] = Float.MAX_VALUE;
         for (int i = 0; i < npoints; i++) {
             int q = points[i];
             if (q != p) {
-                double d = d(p, q);
+                float d = linkage.d(p, q);
                 if (d < distance[p]) {
                     distance[p] = d;
                     neighbor[p] = q;
@@ -223,17 +216,17 @@ class FastPair {
      * Single distance has changed, check if our structures are ok.
      */
     public void updateDistance(int p, int q) {
-        double d = d(p, q);
+        float d = linkage.d(p, q);
 
         if (d < distance[p]) {
-            distance[p] = q;
+            distance[p] = d;
             neighbor[p] = q;
         } else if (neighbor[p] == q && d > distance[p]) {
             findNeighbor(p);
         }
 
         if (d < distance[q]) {
-            distance[q] = p;
+            distance[q] = d;
             neighbor[q] = p;
         } else if (neighbor[q] == p && d > distance[q]) {
             findNeighbor(q);

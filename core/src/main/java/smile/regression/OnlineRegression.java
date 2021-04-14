@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.regression;
 
@@ -25,7 +26,22 @@ package smile.regression;
  * 
  * @author Haifeng Li
  */
-public interface OnlineRegression <T> extends Regression <T> {
+public interface OnlineRegression <T> extends Regression<T> {
+    /**
+     * Updates the model with a (micro-)batch of new samples.
+     * @param x the training instances.
+     * @param y the target values.
+     */
+    default void update(T[] x, double[] y) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("Input vector x of size %d not equal to length %d of y", x.length, y.length));
+        }
+
+        for (int i = 0; i < x.length; i++){
+            update(x[i], y[i]);
+        }
+    }
+
     /**
      * Online update the regression model with a new training instance.
      * In general, this method may be NOT multi-thread safe.
@@ -33,5 +49,5 @@ public interface OnlineRegression <T> extends Regression <T> {
      * @param x training instance.
      * @param y response variable.
      */
-    public void learn(T x, double y);
+    void update(T x, double y);
 }

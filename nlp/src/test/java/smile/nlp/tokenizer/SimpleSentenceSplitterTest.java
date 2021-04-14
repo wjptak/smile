@@ -1,18 +1,19 @@
-/*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
 
 package smile.nlp.tokenizer;
 
@@ -122,5 +123,37 @@ public class SimpleSentenceSplitterTest {
         assertEquals(expResult.length, result.length);
         for (int i = 0; i < result.length; i++)
             assertEquals(expResult[i], result[i]);
+    }
+
+    /**
+     * Test of split method, of class SimpleSentenceSplitter.
+     */
+    @Test
+    public void testSplitEndWithAbbreviation() {
+        System.out.println("split with abbreviation ending");
+        String text1 = "This is an nn. This is the next sentence.";
+        String text2 = "This is an nn. this is the next sentence.";
+        String text3 = "This is an na. This is the next sentence.";
+
+        String[] expResult1 = {"This is an nn. This is the next sentence."};
+        String[] expResult2 = {"This is an nn. this is the next sentence."};
+        String[] expResult3 = {"This is an na.", "This is the next sentence."};
+
+        SimpleSentenceSplitter instance = SimpleSentenceSplitter.getInstance();
+
+        String[] result1 = instance.split(text1);
+        assertEquals(expResult1.length, result1.length);
+        for (int i = 0; i < result1.length; i++)
+            assertEquals(expResult1[i], result1[i]);
+
+        String[] result2 = instance.split(text2);
+        assertEquals(expResult2.length, result2.length);
+        for (int i = 0; i < result2.length; i++)
+            assertEquals(expResult2[i], result2[i]);
+
+        String[] result3 = instance.split(text3);
+        assertEquals(expResult3.length, result3.length);
+        for (int i = 0; i < result3.length; i++)
+            assertEquals(expResult3[i], result3[i]);
     }
 }

@@ -1,28 +1,40 @@
-/*******************************************************************************
-  * Copyright (c) 2010 Haifeng Li
-  *
-  * Licensed under the Apache License, Version 2.0 (the "License");
-  * you may not use this file except in compliance with the License.
-  * You may obtain a copy of the License at
-  *
-  *     http://www.apache.org/licenses/LICENSE-2.0
-  *
-  * Unless required by applicable law or agreed to in writing, software
-  * distributed under the License is distributed on an "AS IS" BASIS,
-  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-  * See the License for the specific language governing permissions and
-  * limitations under the License.
-  *******************************************************************************/
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ *
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ */
+ 
 package smile.benchmark
 
-import smile.data._
-import smile.data.parser.DelimitedTextParser
+import java.util
+import scala.language.postfixOps
+import smile.base.rbf.RBF
+import smile.base.mlp.{Layer, OutputFunction}
 import smile.classification._
-import smile.math.Math
+import smile.clustering.KMeans
+import smile.data.CategoricalEncoder
+import smile.data.`type`.{DataTypes, StructField}
+import smile.data.formula._
+import smile.feature.Standardizer
+import smile.read
+import smile.math.MathEx
+import smile.math.TimeFunction
 import smile.math.distance.EuclideanDistance
 import smile.math.kernel.GaussianKernel
 import smile.math.rbf.GaussianRadialBasis
 import smile.validation._
+import smile.validation.metric._
 import smile.util._
 
 /**
@@ -32,74 +44,92 @@ import smile.util._
 object USPS {
 
   def main(args: Array[String]): Unit = {
-    benchmark
+    benchmark()
   }
 
-  def benchmark() {
+  def benchmark(): Unit = {
     println("USPS")
 
-    val parser = new DelimitedTextParser
-    parser.setResponseIndex(new NominalAttribute("class"), 0)
+    val fields = new util.ArrayList[StructField]
+    fields.add(new StructField("class", DataTypes.ByteType))
+    (1 to 256).foreach(i => fields.add(new StructField("V" + i, DataTypes.DoubleType)))
+    val schema = DataTypes.struct(fields)
 
-    val train = parser.parse(smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"))
-    val test = parser.parse(smile.data.parser.IOUtils.getTestDataFile("usps/zip.test"))
-    val (x, y) = train.unzipInt
-    val (testx, testy) = test.unzipInt
-    val k = Math.max(y) + 1
+    val formula: Formula = "class" ~ "."
+    val zipTrain = read.csv(Paths.getTestData("usps/zip.train").toString, delimiter = ' ', header = false, schema = schema)
+    val zipTest = read.csv(Paths.getTestData("usps/zip.test").toString, delimiter = ' ', header = false, schema = schema)
+    val x = formula.x(zipTrain).toArray(false, CategoricalEncoder.ONE_HOT)
+    val y = formula.y(zipTrain).toIntArray
+    val testx = formula.x(zipTest).toArray(false, CategoricalEncoder.ONE_HOT)
+    val testy = formula.y(zipTest).toIntArray
+
+    val n = x.length
+    val k = 10
 
     // Random Forest
-    val forest = test2(x, y, testx, testy) { (x, y) =>
-      println("Training Random Forest of 200 trees...")
-      new RandomForest(x, y, 200)
-    }.asInstanceOf[RandomForest]
-
-    println("OOB error rate = %.2f%%" format (100.0 * forest.error()))
+    println("Training Random Forest of 200 trees...")
+    val forestTest = validate.classification(formula, zipTrain, zipTest) { (formula, data) =>
+      randomForest(formula, data, ntrees = 200)
+    }
+    println(forestTest)
+    println("OOB error rate = %.2f%%" format (100.0 * forestTest.model.error()))
 
     // Gradient Tree Boost
-    test2(x, y, testx, testy) { (x, y) =>
-      println("Training Gradient Tree Boost of 200 trees...")
-      new GradientTreeBoost(x, y, 200)
+    println("Training Gradient Tree Boost of 200 trees...")
+    val gbmTest = validate.classification(formula, zipTrain, zipTest) { (formula, data) =>
+      gbm(formula, data, ntrees = 200)
     }
+    println(gbmTest)
 
     // SVM
-    test2(x, y, testx, testy) { (x, y) =>
-      println("Training SVM, one epoch...")
-      val svm = new SVM[Array[Double]](new GaussianKernel(8.0), 5.0, k, SVM.Multiclass.ONE_VS_ONE)
-      svm.learn(x, y)
-      svm.finish
-      svm
+    println("Training SVM, one epoch...")
+    val kernel = new GaussianKernel(8.0)
+    val svmTest = validate.classification(x, y, testx, testy) { (x, y) =>
+      ovo(x, y) { (x, y) =>
+        SVM.fit(x, y, kernel, 5, 1E-3)
+      }
     }
+    println(svmTest)
 
     // RBF Network
-    test2(x, y, testx, testy) { (x, y) =>
-      println("Training RBF Network...")
-      val centers = new Array[Array[Double]](200)
-      val basis = SmileUtils.learnGaussianRadialBasis(x, centers)
-      new RBFNetwork[Array[Double]](x, y, new EuclideanDistance, new GaussianRadialBasis(8.0), centers)
+    println("Training RBF Network...")
+    val kmeans = KMeans.fit(x, 200)
+    val distance = new EuclideanDistance
+    val neurons = RBF.of(kmeans.centroids, new GaussianRadialBasis(8.0), distance)
+    val rbfTest = validate.classification(x, y, testx, testy) { (x, y) =>
+      rbfnet(x, y, neurons, false)
     }
+    println(rbfTest)
 
     // Logistic Regression
-    test2(x, y, testx, testy) { (x, y) =>
-      println("Training Logistic regression...")
-      new LogisticRegression(x, y, 0.3, 1E-3, 1000)
+    println("Training Logistic regression...")
+    val logitTest = validate.classification(x, y, testx, testy) { (x, y) =>
+      logit(x, y, 0.3, 1E-3, 1000)
     }
+    println(logitTest)
 
     // Neural Network
-    val p = x(0).length
-    val mu = Math.colMean(x)
-    val sd = Math.colSd(x)
-    x.foreach { xi =>
-      (0 until p) foreach { j => xi(j) = (xi(j) - mu(j)) / sd(j)}
-    }
-    testx.foreach { xi =>
-      (0 until p) foreach { j => xi(j) = (xi(j) - mu(j)) / sd(j)}
-    }
+    val scaler = Standardizer.fit(x)
+    val scaledX = scaler.transform(x)
+    val scaledTestX = scaler.transform(testx)
 
-    test2(x, y, testx, testy) { (x, y) =>
-      println("Training Neural Network, 30 epoch...")
-      val nnet = new NeuralNetwork(NeuralNetwork.ErrorFunction.LEAST_MEAN_SQUARES, NeuralNetwork.ActivationFunction.LOGISTIC_SIGMOID, p, 40, k)
-      (0 until 30) foreach { _ => nnet.learn(x, y) }
-      nnet
-    }
+    println("Training Neural Network, 10 epoch...")
+    val net = new MLP(256,
+      Layer.rectifier(768),
+      Layer.rectifier(192),
+      Layer.rectifier(30),
+      Layer.mle(k, OutputFunction.SIGMOID)
+    )
+    net.setLearningRate(TimeFunction.linear(0.01, 20000, 0.001))
+
+    (1 to 10).foreach(epoch => {
+      println("----- epoch %d -----" format epoch)
+      MathEx.permutate(n).foreach(i =>
+        net.update(scaledX(i), y(i))
+      )
+      val prediction = net.predict(scaledTestX)
+      println("Accuracy = %.2f%%" format (100.0 * Accuracy.of(testy, prediction)))
+      println("Confusion Matrix: %s" format ConfusionMatrix.of(testy, prediction))
+    })
   }
 }
