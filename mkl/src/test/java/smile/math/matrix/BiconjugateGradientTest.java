@@ -53,7 +53,7 @@ public class BiconjugateGradientTest {
     public void setUp() {
         System.out.println("setUp");
 
-        Matrix a = new Matrix(A);
+        Matrix a = Matrix.of(A);
         Matrix.LU lu = a.lu();
         x = lu.solve(b);
     }
@@ -69,9 +69,9 @@ public class BiconjugateGradientTest {
     public void testSolveMatrix() {
         System.out.println("naive matrix");
 
-        Matrix naive = new Matrix(A);
+        Matrix matrix = Matrix.of(A);
         double[] result = new double[3];
-        BiconjugateGradient.solve(naive, b, result);
+        matrix.solve(b, result);
 
         assertEquals(result.length, x.length);
         for (int i = 0; i < x.length; i++) {
@@ -88,7 +88,7 @@ public class BiconjugateGradientTest {
         SparseMatrix sparse = new SparseMatrix(A, 1E-8);
 
         double[] result = new double[3];
-        BiconjugateGradient.solve(sparse, b, result);
+        sparse.solve(b, result);
 
         assertEquals(result.length, x.length);
         for (int i = 0; i < x.length; i++) {

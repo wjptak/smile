@@ -28,11 +28,15 @@ import smile.stat.hypothesis.{ChiSqTest, CorTest, FTest, KSTest, TTest}
   * @author Haifeng Li
   */
 package object math {
+  implicit def pimpInt(x: Int): PimpedInt = PimpedInt(x)
   implicit def pimpDouble(x: Double): PimpedDouble = PimpedDouble(x)
   implicit def pimpIntArray(data: Array[Int]): PimpedArray[Int] = new PimpedArray[Int](data)
   implicit def pimpDoubleArray(data: Array[Double]): PimpedDoubleArray = new PimpedDoubleArray(data)
   implicit def pimpArray2D(data: Array[Array[Double]]): PimpedArray2D = new PimpedArray2D(data)
-  implicit def pimpMatrix(matrix: Matrix): PimpedMatrix = new PimpedMatrix(matrix)
+
+  implicit def array2Matrix(data: Array[Double]): Matrix = Matrix.column(data)
+  implicit def array2Matrix(data: Array[Array[Double]]): Matrix = Matrix.of(data)
+  implicit def matrixOps(matrix: Matrix): MatrixOps = new MatrixOps(matrix)
 
   implicit def array2VectorExpression(x: Array[Double]): VectorLift = VectorLift(x)
   implicit def vectorExpression2Array(exp: VectorExpression): Array[Double] = exp.toArray
@@ -224,6 +228,8 @@ package object math {
   def eye(n: Int): Matrix = Matrix.eye(n)
   /** Returns an m-by-n identity matrix. */
   def eye(m: Int, n: Int): Matrix = Matrix.eye(m, n)
+  /** Returns an m-by-n matrix of uniform distributed random numbers. */
+  def rand(m: Int, n: Int, lo: Double = 0.0, hi: Double = 1.0): Matrix = Matrix.rand(m, n, lo, hi)
   /** Returns an m-by-n matrix of normally distributed random numbers. */
   def randn(m: Int, n: Int, mu: Double = 0.0, sigma: Double = 1.0): Matrix = Matrix.rand(m, n, new GaussianDistribution(mu, sigma))
   /** Returns the trace of matrix. */
@@ -232,41 +238,41 @@ package object math {
   def diag(A: Matrix): Array[Double] = A.diag()
 
   /** LU decomposition. */
-  def lu(A: Array[Array[Double]]): Matrix.LU = new Matrix(A).lu(true)
+  def lu(A: Array[Array[Double]]): Matrix.LU = Matrix.of(A).lu(true)
   /** LU decomposition. */
   def lu(A: Matrix): Matrix.LU = A.lu(false)
   /** LU decomposition. */
   def lu(A: MatrixExpression): Matrix.LU = A.toMatrix.lu(true)
 
   /** QR decomposition. */
-  def qr(A: Array[Array[Double]]): Matrix.QR = new Matrix(A).qr(true)
+  def qr(A: Array[Array[Double]]): Matrix.QR = Matrix.of(A).qr(true)
   /** QR decomposition. */
   def qr(A: Matrix): Matrix.QR = A.qr(false)
   /** QR decomposition. */
   def qr(A: MatrixExpression): Matrix.QR = A.toMatrix.qr(true)
 
   /** Cholesky decomposition. */
-  def cholesky(A: Array[Array[Double]]): Matrix.Cholesky =  new Matrix(A).cholesky(true)
+  def cholesky(A: Array[Array[Double]]): Matrix.Cholesky = Matrix.of(A).cholesky(true)
   /** Cholesky decomposition. */
   def cholesky(A: Matrix): Matrix.Cholesky = A.cholesky(false)
   /** Cholesky decomposition. */
   def cholesky(A: MatrixExpression): Matrix.Cholesky = A.toMatrix.cholesky(true)
 
   /** Returns eigen values. */
-  def eig(A: Array[Array[Double]]): Matrix.EVD = new Matrix(A).eigen(false, false, true)
+  def eig(A: Array[Array[Double]]): Matrix.EVD = Matrix.of(A).eigen(false, false, true)
   /** Returns eigen values. */
   def eig(A: Matrix): Matrix.EVD = A.eigen(false, false, false)
   /** Returns eigen values. */
   def eig(A: MatrixExpression): Matrix.EVD = A.toMatrix.eigen(false, false, true)
 
   /** Eigen decomposition. */
-  def eigen(A: Array[Array[Double]]): Matrix.EVD = new Matrix(A).eigen(false, true, true)
+  def eigen(A: Array[Array[Double]]): Matrix.EVD = Matrix.of(A).eigen(false, true, true)
   /** Eigen decomposition. */
   def eigen(A: Matrix): Matrix.EVD = A.eigen(false, true, false)
   /** Eigen decomposition. */
   def eigen(A: MatrixExpression): Matrix.EVD = A.toMatrix.eigen(false, true, true)
   /** Returns k largest eigenvectors. */
-  def eigen(A: DMatrix, k: Int): Matrix.EVD = A match {
+  def eigen(A: IMatrix, k: Int): Matrix.EVD = A match {
     case a: Matrix =>
       if (a.isSymmetric) ARPACK.syev(a, ARPACK.SymmOption.LA, k)
       else ARPACK.eigen(A, ARPACK.AsymmOption.LM, k)
@@ -277,28 +283,14 @@ package object math {
     case a => ARPACK.eigen(a, ARPACK.AsymmOption.LM, k)
   }
 
-  /** Returns k largest eigenvectors. */
-  def eigen(A: SMatrix, k: Int): FloatMatrix.EVD = A match {
-    case a: FloatMatrix =>
-      if (a.isSymmetric) ARPACK.syev(a, ARPACK.SymmOption.LA, k)
-      else ARPACK.eigen(A, ARPACK.AsymmOption.LM, k)
-    case a: FloatBandMatrix =>
-      if (a.isSymmetric) ARPACK.syev(a, ARPACK.SymmOption.LA, k)
-      else ARPACK.eigen(A, ARPACK.AsymmOption.LM, k)
-    case a: FloatSymmMatrix => ARPACK.syev(a, ARPACK.SymmOption.LA, k)
-    case a => ARPACK.eigen(a, ARPACK.AsymmOption.LM, k)
-  }
-
   /** SVD decomposition. */
-  def svd(A: Array[Array[Double]]): Matrix.SVD = new Matrix(A).svd(true, true)
+  def svd(A: Array[Array[Double]]): Matrix.SVD = Matrix.of(A).svd(true, true)
   /** SVD decomposition. */
   def svd(A: Matrix): Matrix.SVD = A.svd(true, false)
   /** SVD decomposition. */
   def svd(A: MatrixExpression): Matrix.SVD = A.toMatrix.svd(true, true)
   /** Returns k largest singular vectors. */
-  def svd(A: DMatrix, k: Int): Matrix.SVD = ARPACK.svd(A, k)
-  /** Returns k largest singular vectors. */
-  def svd(A: SMatrix, k: Int): FloatMatrix.SVD = ARPACK.svd(A, k)
+  def svd(A: IMatrix, k: Int): Matrix.SVD = ARPACK.svd(A, k)
 
   /** Returns the determinant of matrix. */
   def det(A: Matrix): Double = lu(A).det()

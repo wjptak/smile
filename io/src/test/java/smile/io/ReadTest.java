@@ -67,8 +67,8 @@ public class ReadTest {
     public void testReadDataAvro() throws Exception {
         System.out.println("avro");
         DataFrame df = Read.data(
-                Paths.getTestData("avro/userdata1.avro").toString(),
-                Paths.getTestData("avro/userdata.avsc").toString()
+                Paths.getTestData("kylo/userdata1.avro").toString(),
+                Paths.getTestData("kylo/userdata.avsc").toString()
         );
         System.out.println(df);
     }
@@ -76,7 +76,7 @@ public class ReadTest {
     @Test
     public void testReadDataJson() throws Exception {
         System.out.println("json");
-        DataFrame df = Read.data(Paths.getTestData("json/books1.json").toString());
+        DataFrame df = Read.data(Paths.getTestData("kylo/books.json").toString());
         System.out.println(df);
     }
 
@@ -90,14 +90,14 @@ public class ReadTest {
     @Test
     public void testReadDataParquet() throws Exception {
         System.out.println("parquet");
-        DataFrame df = Read.data(Paths.getTestData("parquet/userdata1.parquet").toString());
+        DataFrame df = Read.data(Paths.getTestData("kylo/userdata1.parquet").toString());
         System.out.println(df);
     }
 
     @Test
     public void testReadDataCsvZip() throws Exception {
         System.out.println("csv zip");
-        DataFrame df = Read.data(Paths.getTestData("usps/zip.train").toString(), "csv?");
+        DataFrame df = Read.data(Paths.getTestData("usps/zip.train").toString(), "csv");
         System.out.println(df);
     }
 

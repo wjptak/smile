@@ -19,18 +19,17 @@ package smile.math.matrix;
 
 import java.io.Serializable;
 import java.nio.DoubleBuffer;
-import java.nio.IntBuffer;
 import smile.math.MathEx;
 import smile.math.blas.*;
 import static smile.math.blas.Layout.*;
 import static smile.math.blas.UPLO.*;
 
 /**
- * They symmetric matrix in packed storage.
+ * The symmetric matrix in packed storage.
  *
  * @author Haifeng Li
  */
-public class SymmMatrix extends DMatrix {
+public class SymmMatrix extends IMatrix {
     private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(SymmMatrix.class);
 
@@ -129,7 +128,7 @@ public class SymmMatrix extends DMatrix {
             return false;
         }
 
-        return equals((SymmMatrix) o, 1E-7f);
+        return equals((SymmMatrix) o, 1E-10);
     }
 
     /**
@@ -175,7 +174,7 @@ public class SymmMatrix extends DMatrix {
     }
 
     @Override
-    public SymmMatrix set(int i, int j, double x) {
+    public void set(int i, int j, double x) {
         if (uplo == LOWER) {
             if (j > i) {
                 int tmp = i;
@@ -191,8 +190,6 @@ public class SymmMatrix extends DMatrix {
             }
             AP[i + (j * (j+1) / 2)] = x;
         }
-
-        return this;
     }
 
     @Override
@@ -204,7 +201,7 @@ public class SymmMatrix extends DMatrix {
     public void mv(double[] work, int inputOffset, int outputOffset) {
         DoubleBuffer xb = DoubleBuffer.wrap(work, inputOffset, n);
         DoubleBuffer yb = DoubleBuffer.wrap(work, outputOffset, n);
-        BLAS.engine.spmv(layout(), uplo, n, 1.0f, DoubleBuffer.wrap(AP), xb, 1, 0.0f, yb, 1);
+        BLAS.engine.spmv(layout(), uplo, n, 1.0, DoubleBuffer.wrap(AP), xb, 1, 0.0, yb, 1);
     }
 
     @Override
@@ -324,7 +321,7 @@ public class SymmMatrix extends DMatrix {
         }
 
         /**
-         * Returns the inverse of matrix. For pseudo inverse, use QRDecomposition.
+         * Returns the inverse of matrix.
          * @return the inverse of matrix.
          */
         public Matrix inverse() {
@@ -340,9 +337,9 @@ public class SymmMatrix extends DMatrix {
          * @return the solution vector.
          */
         public double[] solve(double[] b) {
-            double[] x = b.clone();
-            solve(new Matrix(x));
-            return x;
+            Matrix x = Matrix.column(b);
+            solve(x);
+            return x.A;
         }
 
         /**
@@ -364,7 +361,7 @@ public class SymmMatrix extends DMatrix {
                 throw new RuntimeException("The matrix is singular.");
             }
 
-            int ret = LAPACK.engine.sptrs(lu.layout(), lu.uplo, lu.n, B.n, DoubleBuffer.wrap(lu.AP), IntBuffer.wrap(ipiv), B.A, B.ld);
+            int ret = LAPACK.engine.sptrs(lu.layout(), lu.uplo, lu.n, B.n, lu.AP, ipiv, B.A, B.ld);
             if (ret != 0) {
                 logger.error("LAPACK GETRS error code: {}", ret);
                 throw new ArithmeticException("LAPACK GETRS error code: " + ret);
@@ -457,9 +454,9 @@ public class SymmMatrix extends DMatrix {
          * @return the solution vector.
          */
         public double[] solve(double[] b) {
-            double[] x = b.clone();
-            solve(new Matrix(x));
-            return x;
+            Matrix x = Matrix.column(b);
+            solve(x);
+            return x.A;
         }
 
         /**
@@ -472,7 +469,7 @@ public class SymmMatrix extends DMatrix {
                 throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", lu.n, lu.n, B.m, B.n));
             }
 
-            int info = LAPACK.engine.pptrs(lu.layout(), lu.uplo, lu.n, B.n, DoubleBuffer.wrap(lu.AP), B.A, B.ld);
+            int info = LAPACK.engine.pptrs(lu.layout(), lu.uplo, lu.n, B.n, lu.AP, B.A, B.ld);
             if (info != 0) {
                 logger.error("LAPACK POTRS error code: {}", info);
                 throw new ArithmeticException("LAPACK POTRS error code: " + info);
